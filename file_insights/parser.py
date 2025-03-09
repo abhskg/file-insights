@@ -168,32 +168,7 @@ class FileParser:
         
         # Extract video metadata if enabled and file is a video
         if self._extract_video_metadata and extension in self._common_video_extensions:
-            self._extract_video_info(file_info)
+            from file_insights.video import extract_video_metadata
+            file_info = extract_video_metadata(file_info)
             
         return file_info
-    
-    def _extract_video_info(self, file_info: FileInfo) -> None:
-        """
-        Extract video metadata and update the file_info object.
-        
-        Args:
-            file_info: FileInfo object to update with video metadata
-        """
-        try:
-            from moviepy.editor import VideoFileClip
-            
-            with VideoFileClip(str(file_info.path)) as clip:
-                file_info.video_duration = clip.duration
-                file_info.video_resolution = (clip.w, clip.h)
-                file_info.video_fps = clip.fps
-                
-                # Try to get codec information if available
-                if hasattr(clip, 'codec_name'):
-                    file_info.video_codec = clip.codec_name
-                
-                # Get audio codec if audio is present
-                if clip.audio is not None and hasattr(clip.audio, 'codec_name'):
-                    file_info.audio_codec = clip.audio.codec_name
-                    
-        except Exception as e:
-            print(f"Error extracting video metadata for {file_info.path}: {e}")
