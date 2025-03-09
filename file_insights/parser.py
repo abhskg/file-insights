@@ -25,6 +25,12 @@ class FileInfo:
     modified_time: datetime
     content_preview: Optional[str] = None
     mime_type: Optional[str] = None
+    # Video specific attributes
+    video_duration: Optional[float] = None
+    video_resolution: Optional[Tuple[int, int]] = None
+    video_fps: Optional[float] = None
+    video_codec: Optional[str] = None
+    audio_codec: Optional[str] = None
 
     @property
     def is_binary(self) -> bool:
@@ -43,6 +49,11 @@ class FileInfo:
         """Check if the file appears to be a video."""
         return self.extension in COMMON_VIDEO_EXTENSIONS
     
+    @property
+    def has_video_metadata(self) -> bool:
+        """Check if video metadata has been extracted."""
+        return self.is_video and self.video_duration is not None
+    
 
 class FileParser:
     """Parser that traverses directories and extracts file information."""
@@ -52,6 +63,16 @@ class FileParser:
         self.exclude_patterns = exclude_patterns
         self._common_binary_extensions = COMMON_BINARY_EXTENSIONS
         self._common_video_extensions = COMMON_VIDEO_EXTENSIONS
+        self._extract_video_metadata = False  # Default to not extracting video metadata
+
+    def set_extract_video_metadata(self, value: bool) -> None:
+        """
+        Enable or disable extraction of video metadata.
+        
+        Args:
+            value: Whether to extract video metadata
+        """
+        self._extract_video_metadata = value
 
     def parse_directory(self, directory_path: Path) -> List[FileInfo]:
         """
@@ -135,7 +156,7 @@ class FileParser:
         except Exception:
             pass
 
-        return FileInfo(
+        file_info = FileInfo(
             path=file_path,
             size=stat.st_size,
             extension=extension,
@@ -144,3 +165,35 @@ class FileParser:
             content_preview=content_preview,
             mime_type=mime_type,
         )
+        
+        # Extract video metadata if enabled and file is a video
+        if self._extract_video_metadata and extension in self._common_video_extensions:
+            self._extract_video_info(file_info)
+            
+        return file_info
+    
+    def _extract_video_info(self, file_info: FileInfo) -> None:
+        """
+        Extract video metadata and update the file_info object.
+        
+        Args:
+            file_info: FileInfo object to update with video metadata
+        """
+        try:
+            from moviepy.editor import VideoFileClip
+            
+            with VideoFileClip(str(file_info.path)) as clip:
+                file_info.video_duration = clip.duration
+                file_info.video_resolution = (clip.w, clip.h)
+                file_info.video_fps = clip.fps
+                
+                # Try to get codec information if available
+                if hasattr(clip, 'codec_name'):
+                    file_info.video_codec = clip.codec_name
+                
+                # Get audio codec if audio is present
+                if clip.audio is not None and hasattr(clip.audio, 'codec_name'):
+                    file_info.audio_codec = clip.audio.codec_name
+                    
+        except Exception as e:
+            print(f"Error extracting video metadata for {file_info.path}: {e}")

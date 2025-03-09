@@ -6,7 +6,7 @@ import json
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 import rich
 from rich.console import Console
@@ -73,6 +73,46 @@ class Insights:
             self.console.print("\n[bold]File Tree:[/bold]")
             self.console.print(file_tree)
 
+        # Add video statistics if available
+        if "video_stats" in self.data and self.data["video_stats"]["total_videos"] > 0:
+            video_stats = self.data["video_stats"]
+            self.console.print(Panel.fit("🎬 [bold]Video Files[/bold]", style="cyan"))
+            
+            video_table = Table(title="Video Statistics")
+            video_table.add_column("Statistic", style="cyan")
+            video_table.add_column("Value", style="green")
+            
+            video_table.add_row("Total Videos", str(video_stats["total_videos"]))
+            video_table.add_row("Total Video Duration", f"{video_stats['total_duration']:.2f} seconds")
+            if video_stats["total_duration"] > 3600:
+                hours = video_stats["total_duration"] / 3600
+                video_table.add_row("", f"{hours:.2f} hours")
+                
+            video_table.add_row("Average Duration", f"{video_stats['average_duration']:.2f} seconds")
+            
+            if video_stats["resolution_counts"]:
+                res_table = Table(title="Resolution Distribution")
+                res_table.add_column("Resolution", style="cyan")
+                res_table.add_column("Count", style="green")
+                
+                for res, count in video_stats["resolution_counts"].items():
+                    res_table.add_row(res, str(count))
+                    
+                self.console.print(video_table)
+                self.console.print(res_table)
+            else:
+                self.console.print(video_table)
+                
+            if video_stats["codec_counts"]:
+                codec_table = Table(title="Video Codec Distribution")
+                codec_table.add_column("Codec", style="cyan")
+                codec_table.add_column("Count", style="green")
+                
+                for codec, count in video_stats["codec_counts"].items():
+                    codec_table.add_row(codec if codec else "Unknown", str(count))
+                    
+                self.console.print(codec_table)
+
     def _build_tree(self, tree_data: Dict) -> Tree:
         """Build a rich Tree from the tree data."""
         root = Tree("📁 Root")
@@ -110,7 +150,12 @@ class InsightGenerator:
             "age_distribution": self._age_distribution(),
             "file_tree": self._build_file_tree(),
         }
-
+        
+        # Add video statistics if video files are present
+        video_files = [f for f in self.files if f.is_video]
+        if video_files:
+            data["video_stats"] = self._video_statistics(video_files)
+            
         return Insights(data)
 
     def _general_statistics(self) -> Dict:
@@ -222,6 +267,50 @@ class InsightGenerator:
             current[parts[-1]] = file.size
 
         return result
+
+    def _video_statistics(self, video_files: List[FileInfo]) -> Dict:
+        """Generate statistics about video files."""
+        total_videos = len(video_files)
+        
+        # Get video files with metadata
+        videos_with_metadata = [v for v in video_files if v.has_video_metadata]
+        
+        # Video duration stats
+        total_duration = 0
+        average_duration = 0
+        
+        # Resolution stats
+        resolution_counts = Counter()
+        
+        # Codec stats
+        codec_counts = Counter()
+        
+        if videos_with_metadata:
+            # Calculate duration stats
+            durations = [v.video_duration for v in videos_with_metadata if v.video_duration is not None]
+            if durations:
+                total_duration = sum(durations)
+                average_duration = total_duration / len(durations)
+            
+            # Count resolutions
+            for v in videos_with_metadata:
+                if v.video_resolution:
+                    width, height = v.video_resolution
+                    resolution_counts[f"{width}x{height}"] += 1
+            
+            # Count codecs
+            for v in videos_with_metadata:
+                if v.video_codec:
+                    codec_counts[v.video_codec] += 1
+        
+        return {
+            "total_videos": total_videos,
+            "videos_with_metadata": len(videos_with_metadata),
+            "total_duration": total_duration,
+            "average_duration": average_duration,
+            "resolution_counts": dict(resolution_counts.most_common()),
+            "codec_counts": dict(codec_counts.most_common()),
+        }
 
 
 def format_size(size_bytes: int) -> str:

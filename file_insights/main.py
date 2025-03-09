@@ -38,11 +38,17 @@ console = Console()
     multiple=True,
     help="Patterns to exclude (supports glob patterns)",
 )
+@click.option(
+    "--video-metadata/--no-video-metadata",
+    default=False,
+    help="Extract metadata for video files",
+)
 def main(
     directory: str,
     output: Optional[str] = None,
     recursive: bool = True,
     exclude: tuple = (),
+    video_metadata: bool = False,
 ):
     """
     Parse files in DIRECTORY and generate insights.
@@ -55,6 +61,12 @@ def main(
         # Parse the directory
         console.print(f"[bold]Scanning directory:[/bold] {directory}")
         parser = FileParser(recursive=recursive, exclude_patterns=exclude)
+        
+        # Configure video metadata extraction if requested
+        if video_metadata:
+            console.print("[bold]Video metadata extraction enabled[/bold]")
+            parser.set_extract_video_metadata(True)
+            
         files = parser.parse_directory(Path(directory))
 
         console.print(f"[green]Found {len(files)} files[/green]")
