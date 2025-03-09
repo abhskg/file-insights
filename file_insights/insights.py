@@ -84,12 +84,9 @@ class Insights:
 
         def add_node(parent_tree, node_data, path=""):
             for name, data in sorted(node_data.items()):
-                if isinstance(data, dict):  # Directory
-                    subpath = f"{path}/{name}" if path else name
-                    subdir = parent_tree.add(f"📁 [blue]{name}[/blue]")
-                    add_node(subdir, data, subpath)
-                else:  # File
-                    filesize = data["size"]
+                if isinstance(data, dict) and all(not isinstance(v, (dict, list)) for k, v in data.items()):  # File metadata dict
+                    # This is a file entry (our new format)
+                    filesize = data.get("size", 0)
                     icon = "📄"
                     
                     # Special icon for video files
@@ -108,29 +105,54 @@ class Insights:
                         if duration is not None:
                             video_info.append(f"{duration:.1f}s")
                         if resolution is not None:
-                            video_info.append(f"{resolution[0]}x{resolution[1]}")
+                            # Handle both tuple and string formats of resolution
+                            if isinstance(resolution, tuple) and len(resolution) == 2:
+                                video_info.append(f"{resolution[0]}x{resolution[1]}")
+                            elif isinstance(resolution, str):
+                                video_info.append(resolution)
                         
                         if video_info:
                             file_info += f" [magenta]{' | '.join(video_info)}[/magenta]"
                     
                     parent_tree.add(file_info)
+                elif isinstance(data, tuple) and len(data) == 2:  # Old format (tuple)
+                    # This is a file entry in the old format
+                    filesize = data[0]
+                    extension = data[1]
+                    icon = "📄"
+                    parent_tree.add(f"{icon} [green]{name}[/green] ({format_size(filesize)})")
+                elif isinstance(data, dict):  # Directory
+                    subpath = f"{path}/{name}" if path else name
+                    subdir = parent_tree.add(f"📁 [blue]{name}[/blue]")
+                    add_node(subdir, data, subpath)
 
         add_node(root_tree, tree_data)
         return root_tree
 
-    # Convert data to a serializable format
-    def serialize_data(obj):
-        if isinstance(obj, tuple) and len(obj) == 2 and all(isinstance(i, int) for i in obj):
-            # Handle video resolution tuples
-            return f"{obj[0]}x{obj[1]}"
-        return str(obj)
-    
     def save(self, output_path: str):
         """Save insights to a JSON file."""
-        data_copy = json.loads(json.dumps(self.data, default=self.serialize_data))
-
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(data_copy, f, indent=2)
+        # Convert data to a serializable format
+        def serialize_data(obj):
+            if obj is None:
+                return None
+            if isinstance(obj, tuple) and len(obj) == 2:
+                try:
+                    # Handle video resolution tuples
+                    return f"{obj[0]}x{obj[1]}"
+                except (IndexError, TypeError):
+                    # In case the tuple elements aren't accessible
+                    return str(obj)
+            return str(obj)
+        
+        try:
+            data_copy = json.loads(json.dumps(self.data, default=serialize_data))
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(data_copy, f, indent=2)
+        except Exception as e:
+            print(f"Error saving insights: {e}")
+            # Fallback to simple serialization
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, indent=2, default=str)
 
 
 class InsightGenerator:
@@ -229,6 +251,8 @@ class InsightGenerator:
             "Last week": 0,
             "Last month": 0,
             "Last year": 0,
+            "Last 3 years": 0,
+            "Last 10 years": 0,
             "Older": 0,
         }
 
@@ -243,6 +267,10 @@ class InsightGenerator:
                 age_distribution["Last month"] += 1
             elif age < 31536000:  # 365 days
                 age_distribution["Last year"] += 1
+            elif age < 94672800:  # 3 years
+                age_distribution["Last 3 years"] += 1
+            elif age < 315360000:  # 10 years
+                age_distribution["Last 10 years"] += 1
             else:
                 age_distribution["Older"] += 1
 

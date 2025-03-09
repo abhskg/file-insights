@@ -54,6 +54,16 @@ def generate_video_statistics(video_files: List[FileInfo]) -> Dict:
     Returns:
         Dictionary with video statistics
     """
+    if not video_files:
+        return {
+            "total_videos": 0,
+            "videos_with_metadata": 0,
+            "total_duration": 0,
+            "average_duration": 0,
+            "resolution_counts": {},
+            "codec_counts": {},
+        }
+    
     total_videos = len(video_files)
     
     # Get video files with metadata
@@ -79,8 +89,15 @@ def generate_video_statistics(video_files: List[FileInfo]) -> Dict:
         # Count resolutions
         for v in videos_with_metadata:
             if v.video_resolution:
-                width, height = v.video_resolution
-                resolution_counts[f"{width}x{height}"] += 1
+                try:
+                    if isinstance(v.video_resolution, tuple) and len(v.video_resolution) >= 2:
+                        width, height = v.video_resolution[0], v.video_resolution[1]
+                        resolution_counts[f"{width}x{height}"] += 1
+                    elif isinstance(v.video_resolution, str):
+                        resolution_counts[v.video_resolution] += 1
+                except (TypeError, IndexError, ValueError):
+                    # Skip if the resolution format is unexpected
+                    pass
         
         # Count codecs
         for v in videos_with_metadata:
@@ -105,7 +122,7 @@ def display_video_insights(console, video_stats: Dict) -> None:
         console: Rich console instance for output
         video_stats: Dictionary with video statistics
     """
-    if not video_stats or video_stats["total_videos"] == 0:
+    if not video_stats or video_stats.get("total_videos", 0) == 0:
         return
         
     console.print(Panel.fit("🎬 [bold]Video Files[/bold]", style="cyan"))
@@ -115,49 +132,56 @@ def display_video_insights(console, video_stats: Dict) -> None:
     video_table.add_column("Statistic", style="cyan")
     video_table.add_column("Value", style="green")
     
-    video_table.add_row("Total Videos", str(video_stats["total_videos"]))
-    video_table.add_row("Videos with Metadata", str(video_stats["videos_with_metadata"]))
+    video_table.add_row("Total Videos", str(video_stats.get("total_videos", 0)))
+    video_table.add_row("Videos with Metadata", str(video_stats.get("videos_with_metadata", 0)))
     
-    if video_stats["total_duration"] > 0:
-        video_table.add_row("Total Video Duration", f"{video_stats['total_duration']:.2f} seconds")
-        if video_stats["total_duration"] > 3600:
-            hours = video_stats["total_duration"] / 3600
+    total_duration = video_stats.get("total_duration", 0)
+    if total_duration > 0:
+        video_table.add_row("Total Video Duration", f"{total_duration:.2f} seconds")
+        if total_duration > 3600:
+            hours = total_duration / 3600
             video_table.add_row("", f"{hours:.2f} hours")
             
-        video_table.add_row("Average Duration", f"{video_stats['average_duration']:.2f} seconds")
+        avg_duration = video_stats.get("average_duration", 0)
+        if avg_duration > 0:
+            video_table.add_row("Average Duration", f"{avg_duration:.2f} seconds")
     
     console.print(video_table)
     
     # Resolution distribution table
-    if video_stats["resolution_counts"]:
+    resolution_counts = video_stats.get("resolution_counts", {})
+    if resolution_counts:
         res_table = Table(title="Resolution Distribution")
         res_table.add_column("Resolution", style="cyan")
         res_table.add_column("Count", style="green")
         res_table.add_column("Percentage", style="yellow")
         
-        total = sum(video_stats["resolution_counts"].values())
+        total = sum(resolution_counts.values())
         
-        for res, count in video_stats["resolution_counts"].items():
-            percentage = (count / total) * 100 if total > 0 else 0
-            res_table.add_row(res, str(count), f"{percentage:.1f}%")
+        for res, count in resolution_counts.items():
+            if res and count:
+                percentage = (count / total) * 100 if total > 0 else 0
+                res_table.add_row(str(res), str(count), f"{percentage:.1f}%")
             
         console.print(res_table)
         
     # Codec distribution table
-    if video_stats["codec_counts"]:
+    codec_counts = video_stats.get("codec_counts", {})
+    if codec_counts:
         codec_table = Table(title="Video Codec Distribution")
         codec_table.add_column("Codec", style="cyan")
         codec_table.add_column("Count", style="green")
         codec_table.add_column("Percentage", style="yellow")
         
-        total = sum(video_stats["codec_counts"].values())
+        total = sum(codec_counts.values())
         
-        for codec, count in video_stats["codec_counts"].items():
-            percentage = (count / total) * 100 if total > 0 else 0
-            codec_table.add_row(codec if codec else "Unknown", str(count), f"{percentage:.1f}%")
+        for codec, count in codec_counts.items():
+            if count:
+                percentage = (count / total) * 100 if total > 0 else 0
+                codec_table.add_row(codec if codec else "Unknown", str(count), f"{percentage:.1f}%")
             
         console.print(codec_table)
     
     # Tip about file tree
-    if video_stats["videos_with_metadata"] > 0:
+    if video_stats.get("videos_with_metadata", 0) > 0:
         console.print("[dim italic]Note: Video details are also included in the file tree view[/dim italic]") 
