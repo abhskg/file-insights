@@ -6,7 +6,7 @@ import json
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import rich
 from rich.console import Console
@@ -89,20 +89,45 @@ class Insights:
                     subdir = parent_tree.add(f"📁 [blue]{name}[/blue]")
                     add_node(subdir, data, subpath)
                 else:  # File
-                    filesize = data[0]
-                    extension = data[1]
+                    filesize = data["size"]
                     icon = "📄"
-                    parent_tree.add(
-                        f"{icon} [green]{name}[/green] ({format_size(filesize)})"
-                    )
+                    
+                    # Special icon for video files
+                    if data.get("is_video", False):
+                        icon = "🎬"
+                        
+                    # Basic file info
+                    file_info = f"{icon} [green]{name}[/green] ({format_size(filesize)})"
+                    
+                    # Add video metadata if available
+                    if data.get("has_video_metadata", False):
+                        duration = data.get("video_duration")
+                        resolution = data.get("video_resolution")
+                        
+                        video_info = []
+                        if duration is not None:
+                            video_info.append(f"{duration:.1f}s")
+                        if resolution is not None:
+                            video_info.append(f"{resolution[0]}x{resolution[1]}")
+                        
+                        if video_info:
+                            file_info += f" [magenta]{' | '.join(video_info)}[/magenta]"
+                    
+                    parent_tree.add(file_info)
 
         add_node(root_tree, tree_data)
         return root_tree
 
+    # Convert data to a serializable format
+    def serialize_data(obj):
+        if isinstance(obj, tuple) and len(obj) == 2 and all(isinstance(i, int) for i in obj):
+            # Handle video resolution tuples
+            return f"{obj[0]}x{obj[1]}"
+        return str(obj)
+    
     def save(self, output_path: str):
         """Save insights to a JSON file."""
-        # Convert data to a serializable format
-        data_copy = json.loads(json.dumps(self.data, default=str))
+        data_copy = json.loads(json.dumps(self.data, default=self.serialize_data))
 
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data_copy, f, indent=2)
@@ -243,11 +268,25 @@ class InsightGenerator:
                     current[part] = {}
                 current = current[part]
                 
-            # Add the file with its size
-            current[file_info.path.name] = (
-                file_info.size,
-                file_info.extension,
-            )
+            # Add the file with its metadata
+            file_data = {
+                "size": file_info.size,
+                "extension": file_info.extension,
+                "is_video": file_info.is_video,
+            }
+            
+            # Add video metadata if available
+            if file_info.is_video and file_info.has_video_metadata:
+                file_data.update({
+                    "has_video_metadata": True,
+                    "video_duration": file_info.video_duration,
+                    "video_resolution": file_info.video_resolution,
+                    "video_fps": file_info.video_fps,
+                    "video_codec": file_info.video_codec,
+                    "audio_codec": file_info.audio_codec,
+                })
+                
+            current[file_info.path.name] = file_data
 
         return tree
 
