@@ -11,6 +11,8 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from tqdm import tqdm
 
+from file_insights.constants import COMMON_BINARY_EXTENSIONS, COMMON_VIDEO_EXTENSIONS
+
 
 @dataclass
 class FileInfo:
@@ -43,37 +45,8 @@ class FileParser:
     def __init__(self, recursive: bool = True, exclude_patterns: Tuple[str, ...] = ()):
         self.recursive = recursive
         self.exclude_patterns = exclude_patterns
-        self._common_binary_extensions = {
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".gif",
-            ".bmp",
-            ".ico",
-            ".svg",
-            ".mp3",
-            ".mp4",
-            ".avi",
-            ".mov",
-            ".mkv",
-            ".wav",
-            ".zip",
-            ".tar",
-            ".gz",
-            ".rar",
-            ".7z",
-            ".exe",
-            ".dll",
-            ".so",
-            ".dylib",
-            ".pdf",
-            ".doc",
-            ".docx",
-            ".xls",
-            ".xlsx",
-            ".ppt",
-            ".pptx",
-        }
+        self._common_binary_extensions = COMMON_BINARY_EXTENSIONS
+        self._common_video_extensions = COMMON_VIDEO_EXTENSIONS
 
     def parse_directory(self, directory_path: Path) -> List[FileInfo]:
         """
