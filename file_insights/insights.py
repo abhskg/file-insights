@@ -299,6 +299,8 @@ class InsightGenerator:
             # Add the file with its metadata
             file_data = {
                 "size": file_info.size,
+                "file_name": file_info.name,
+                "file_path": file_info.path,
                 "extension": file_info.extension,
                 "is_video": file_info.is_video,
             }

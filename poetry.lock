@@ -665,6 +665,30 @@ files = [
 tqdm = "*"
 
 [[package]]
+name = "psycopg"
+version = "3.2.5"
+description = "PostgreSQL database adapter for Python"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "psycopg-3.2.5-py3-none-any.whl", hash = "sha256:b782130983e5b3de30b4c529623d3687033b4dafa05bb661fc6bf45837ca5879"},
+    {file = "psycopg-3.2.5.tar.gz", hash = "sha256:f5f750611c67cb200e85b408882f29265c66d1de7f813add4f8125978bfd70e8"},
+]
+
+[package.dependencies]
+typing-extensions = {version = ">=4.6", markers = "python_version < \"3.13\""}
+tzdata = {version = "*", markers = "sys_platform == \"win32\""}
+
+[package.extras]
+binary = ["psycopg-binary (==3.2.5) ; implementation_name != \"pypy\""]
+c = ["psycopg-c (==3.2.5) ; implementation_name != \"pypy\""]
+dev = ["ast-comments (>=1.1.2)", "black (>=24.1.0)", "codespell (>=2.2)", "dnspython (>=2.1)", "flake8 (>=4.0)", "isort-psycopg", "isort[colors] (>=6.0)", "mypy (>=1.14)", "pre-commit (>=4.0.1)", "types-setuptools (>=57.4)", "wheel (>=0.37)"]
+docs = ["Sphinx (>=5.0)", "furo (==2022.6.21)", "sphinx-autobuild (>=2021.3.14)", "sphinx-autodoc-typehints (>=1.12)"]
+pool = ["psycopg-pool"]
+test = ["anyio (>=4.0)", "mypy (>=1.14)", "pproxy (>=2.7)", "pytest (>=6.2.5)", "pytest-cov (>=3.0)", "pytest-randomly (>=3.5)"]
+
+[[package]]
 name = "pygments"
 version = "2.19.1"
 description = "Pygments is a syntax highlighting package written in Python."
@@ -820,7 +844,20 @@ files = [
     {file = "typing_extensions-4.12.2-py3-none-any.whl", hash = "sha256:04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d"},
     {file = "typing_extensions-4.12.2.tar.gz", hash = "sha256:1a7ead55c7e559dd4dee8856e3a88b41225abfe1ce8df57b7c13915fe121ffb8"},
 ]
-markers = {main = "python_version < \"3.11\""}
+markers = {main = "python_version < \"3.13\""}
+
+[[package]]
+name = "tzdata"
+version = "2025.1"
+description = "Provider of IANA time zone data"
+optional = false
+python-versions = ">=2"
+groups = ["main"]
+markers = "sys_platform == \"win32\""
+files = [
+    {file = "tzdata-2025.1-py2.py3-none-any.whl", hash = "sha256:7e127113816800496f027041c570f50bcd464a020098a3b6b199517772303639"},
+    {file = "tzdata-2025.1.tar.gz", hash = "sha256:24894909e88cdb28bd1636c6887801df64cb485bd593f2fd83ef29075a81d694"},
+]
 
 [[package]]
 name = "urllib3"
@@ -843,4 +880,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "9606cc27bc2e3c10418a41cbab20c35a9e02ead14f1ddd5de3564b05e2c637a5"
+content-hash = "02f0a1d07963f791b10b727178f383a8bcdeb6f2b44493eddbad9b88e5c0383a"
