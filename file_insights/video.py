@@ -22,24 +22,55 @@ def extract_video_metadata(file_info: FileInfo) -> FileInfo:
     Returns:
         The updated FileInfo object
     """
+    print(f"Extracting video metadata for: {file_info.path}")
+    
     try:
         from moviepy.editor import VideoFileClip
         
-        with VideoFileClip(str(file_info.path)) as clip:
-            file_info.video_duration = clip.duration
-            file_info.video_resolution = (clip.w, clip.h)
-            file_info.video_fps = clip.fps
+        file_path = str(file_info.path)
+        print(f"Opening video file: {file_path}")
+        
+        with VideoFileClip(file_path) as clip:
+            print(f"Video loaded. Duration: {clip.duration}, Size: {clip.size}")
+            
+            file_info.video_duration = float(clip.duration) if clip.duration is not None else None
+            
+            if hasattr(clip, 'size') and clip.size and len(clip.size) == 2:
+                width, height = clip.size
+                file_info.video_resolution = (int(width), int(height))
+                
+            file_info.video_fps = float(clip.fps) if clip.fps is not None else None
             
             # Try to get codec information if available
             if hasattr(clip, 'codec_name'):
                 file_info.video_codec = clip.codec_name
             
             # Get audio codec if audio is present
-            if clip.audio is not None and hasattr(clip.audio, 'codec_name'):
-                file_info.audio_codec = clip.audio.codec_name
+            if clip.audio is not None:
+                if hasattr(clip.audio, 'codec_name'):
+                    file_info.audio_codec = clip.audio.codec_name
+                print(f"Audio track found in {file_path}")
+            else:
+                print(f"No audio track in {file_path}")
+                
+        print(f"Successfully extracted metadata from {file_path}: Resolution: {file_info.video_resolution}, FPS: {file_info.video_fps}")
                 
     except Exception as e:
         print(f"Error extracting video metadata for {file_info.path}: {e}")
+        # Don't return None - just keep the original file_info without metadata
+        
+    # Ensure we have valid metadata types for the database
+    if file_info.video_duration is not None and not isinstance(file_info.video_duration, (int, float)):
+        try:
+            file_info.video_duration = float(file_info.video_duration)
+        except (ValueError, TypeError):
+            file_info.video_duration = None
+            
+    if file_info.video_fps is not None and not isinstance(file_info.video_fps, (int, float)):
+        try:
+            file_info.video_fps = float(file_info.video_fps)
+        except (ValueError, TypeError):
+            file_info.video_fps = None
         
     return file_info
 

@@ -79,10 +79,13 @@ class DatabaseManager:
             else:
                 raise Exception(f"Database connection error: {error_message}")
         
-    def initialize_database(self) -> None:
+    def initialize_database(self, rebuild: bool = False) -> None:
         """
         Initialize the database schema if it doesn't exist.
         Creates necessary tables for storing file information.
+        
+        Args:
+            rebuild: If True, drop existing tables and recreate them
         """
         try:
             # Test connection first
@@ -90,6 +93,13 @@ class DatabaseManager:
             
             with psycopg.connect(self.connection_string) as conn:
                 with conn.cursor() as cur:
+                    # Drop tables if rebuild is requested
+                    if rebuild:
+                        print("Rebuilding database schema...")
+                        # Drop in reverse order to respect foreign key constraints
+                        cur.execute("DROP TABLE IF EXISTS video_metadata")
+                        cur.execute("DROP TABLE IF EXISTS files")
+                    
                     # Create the files table
                     cur.execute("""
                         CREATE TABLE IF NOT EXISTS files (
@@ -100,7 +110,6 @@ class DatabaseManager:
                             extension TEXT,
                             created_time TIMESTAMP NOT NULL,
                             modified_time TIMESTAMP NOT NULL,
-                            content_preview TEXT,
                             mime_type TEXT,
                             is_binary BOOLEAN NOT NULL,
                             is_video BOOLEAN NOT NULL,
@@ -197,15 +206,14 @@ class DatabaseManager:
                             path_str = self._prepare_for_db(file_info.path)
                             name = self._prepare_for_db(file_info.name)
                             extension = self._prepare_for_db(file_info.extension)
-                            content_preview = self._prepare_for_db(file_info.content_preview)
                             mime_type = self._prepare_for_db(file_info.mime_type)
                         
-                            # Insert into files table
+                            # Insert into files table - no content_preview
                             cur.execute("""
                                 INSERT INTO files (
                                     path, name, size, extension, created_time, modified_time, 
-                                    content_preview, mime_type, is_binary, is_video, scan_timestamp
-                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    mime_type, is_binary, is_video, scan_timestamp
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                 RETURNING id
                             """, (
                                 path_str,
@@ -214,7 +222,6 @@ class DatabaseManager:
                                 extension,
                                 file_info.created_time,
                                 file_info.modified_time,
-                                content_preview,
                                 mime_type,
                                 file_info.is_binary,
                                 file_info.is_video,
@@ -241,6 +248,12 @@ class DatabaseManager:
                                 
                                 video_codec = self._prepare_for_db(file_info.video_codec)
                                 audio_codec = self._prepare_for_db(file_info.audio_codec)
+                                
+                                # Debug: Print video metadata before inserting
+                                print(f"Video metadata for {file_info.path.name}: " 
+                                     f"duration={file_info.video_duration}, "
+                                     f"resolution={resolution_width}x{resolution_height}, "
+                                     f"fps={file_info.video_fps}")
                                 
                                 cur.execute("""
                                     INSERT INTO video_metadata (
@@ -333,7 +346,7 @@ class DatabaseManager:
                             extension=row['extension'],
                             created_time=row['created_time'],
                             modified_time=row['modified_time'],
-                            content_preview=row['content_preview'],
+                            content_preview=None,  # Don't retrieve content preview
                             mime_type=row['mime_type'],
                             video_duration=row.get('video_duration'),
                             video_resolution=video_resolution,

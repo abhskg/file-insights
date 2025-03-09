@@ -66,6 +66,16 @@ def cli():
     "--db-connection",
     help="Database connection string. If not provided, uses DATABASE_URL environment variable.",
 )
+@click.option(
+    "--rebuild-db",
+    is_flag=True,
+    help="Rebuild the database schema (drops all existing data)",
+)
+@click.option(
+    "--verbose", "-v",
+    is_flag=True,
+    help="Print verbose debug information",
+)
 def scan(
     directory: str,
     output: Optional[str] = None,
@@ -74,6 +84,8 @@ def scan(
     video_metadata: bool = False,
     db_save: bool = False,
     db_connection: Optional[str] = None,
+    rebuild_db: bool = False,
+    verbose: bool = False,
 ):
     """
     Parse files in DIRECTORY and generate insights.
@@ -95,6 +107,17 @@ def scan(
         files = parser.parse_directory(Path(directory))
 
         console.print(f"[green]Found {len(files)} files[/green]")
+        
+        # Print debug info about video files if verbose
+        if verbose and video_metadata:
+            video_files = [f for f in files if f.is_video]
+            console.print(f"[yellow]Found {len(video_files)} video files[/yellow]")
+            
+            videos_with_metadata = [v for v in video_files if v.has_video_metadata]
+            console.print(f"[yellow]Successfully extracted metadata for {len(videos_with_metadata)} videos[/yellow]")
+            
+            for video in videos_with_metadata:
+                console.print(f"[dim]Video: {video.name} - Duration: {video.video_duration}, Resolution: {video.video_resolution}, FPS: {video.video_fps}[/dim]")
 
         # Save to database if requested
         if db_save:
@@ -107,9 +130,31 @@ def scan(
                 try:
                     console.print("[bold]Saving to database...[/bold]")
                     db_manager = DatabaseManager(connection_string=db_connection)
-                    db_manager.initialize_database()
+                    
+                    # Test DB connection first
+                    db_manager.test_connection()
+                    console.print("[green]Database connection successful[/green]")
+                    
+                    if rebuild_db:
+                        console.print("[bold yellow]Rebuilding database schema (all existing data will be lost)[/bold yellow]")
+                    
+                    db_manager.initialize_database(rebuild=rebuild_db)
+                    console.print("[green]Database schema initialized[/green]")
+                    
+                    if verbose:
+                        console.print(f"[yellow]Saving {len(files)} files to database...[/yellow]")
+                        if video_metadata:
+                            video_count = sum(1 for f in files if f.is_video)
+                            console.print(f"[yellow]Including {video_count} video files[/yellow]")
+                    
                     saved_count = db_manager.store_file_infos(files)
                     console.print(f"[green]Saved {saved_count} files to database[/green]")
+                    
+                    # Verify video storage if verbose
+                    if verbose and video_metadata:
+                        video_count = db_manager.count_files(video_only=True)
+                        console.print(f"[yellow]Verified {video_count} video files in database[/yellow]")
+                        
                 except Exception as e:
                     console.print(f"[bold red]Database error:[/bold red] {str(e)}")
                     console.print("[yellow]Continuing with insights generation...[/yellow]")
@@ -130,6 +175,10 @@ def scan(
         return 0
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {str(e)}")
+        if verbose:
+            import traceback
+            console.print("[bold red]Detailed error:[/bold red]")
+            console.print(traceback.format_exc())
         return 1
 
 
