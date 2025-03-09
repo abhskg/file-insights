@@ -37,7 +37,12 @@ class FileInfo:
     def name(self) -> str:
         """Get the file name."""
         return self.path.name
-
+    
+    @property
+    def is_video(self) -> bool:
+        """Check if the file appears to be a video."""
+        return self.extension in COMMON_VIDEO_EXTENSIONS
+    
 
 class FileParser:
     """Parser that traverses directories and extracts file information."""
