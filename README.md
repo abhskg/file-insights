@@ -24,13 +24,13 @@ poetry install
 
 ```bash
 # Basic usage (scan current directory)
-file-insights ./
+poetry run file-insights ./
 
 # Scan a specific directory with output file
-file-insights /path/to/directory --output insights.json
+poetry run file-insights ./file-insights /path/to/directory --output insights.json
 
 # Get help with available options
-file-insights --help
+poetry run file-insights ./file-insights --help
 ```
 
 ## Development
