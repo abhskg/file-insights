@@ -22,6 +22,26 @@ cd file-insights
 poetry install
 ```
 
+### PostgreSQL Requirements
+
+For the database functionality to work properly, you need:
+
+1. PostgreSQL 12+ installed on your system
+2. PostgreSQL development headers (required for building psycopg)
+
+#### On Ubuntu/Debian:
+```bash
+sudo apt-get install postgresql postgresql-contrib libpq-dev
+```
+
+#### On macOS (using Homebrew):
+```bash
+brew install postgresql
+```
+
+#### On Windows:
+Install PostgreSQL from the [official website](https://www.postgresql.org/download/windows/) and ensure that the bin directory is in your PATH.
+
 ## Usage
 
 ### Basic Usage
@@ -77,6 +97,29 @@ You can provide a database connection string in two ways:
    ```bash
    poetry run file-insights scan --db-save --db-connection "postgresql://user:password@localhost:5432/fileinsights"
    ```
+
+#### Creating the Database
+
+Before using the tool with a database, you need to create a PostgreSQL database:
+
+```bash
+# Connect to PostgreSQL as the postgres user
+sudo -u postgres psql
+
+# In the PostgreSQL console, create a new database
+CREATE DATABASE fileinsights;
+
+# Create a user (if you don't want to use the postgres user)
+CREATE USER fileuser WITH PASSWORD 'password';
+
+# Grant privileges to the user
+GRANT ALL PRIVILEGES ON DATABASE fileinsights TO fileuser;
+
+# Exit
+\q
+```
+
+The database schema will be automatically created when you first run the tool with `--db-save`.
 
 ### Video Metadata
 

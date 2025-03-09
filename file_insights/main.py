@@ -13,7 +13,14 @@ from rich.panel import Panel
 
 from file_insights.parser import FileParser
 from file_insights.insights import InsightGenerator
-from file_insights.database import DatabaseManager
+
+# Import DatabaseManager, but handle potential import errors
+try:
+    from file_insights.database import DatabaseManager
+    DATABASE_AVAILABLE = True
+except ImportError as e:
+    DATABASE_AVAILABLE = False
+    DATABASE_IMPORT_ERROR = str(e)
 
 console = Console()
 
@@ -91,15 +98,21 @@ def scan(
 
         # Save to database if requested
         if db_save:
-            try:
-                console.print("[bold]Saving to database...[/bold]")
-                db_manager = DatabaseManager(connection_string=db_connection)
-                db_manager.initialize_database()
-                saved_count = db_manager.store_file_infos(files)
-                console.print(f"[green]Saved {saved_count} files to database[/green]")
-            except Exception as e:
-                console.print(f"[bold red]Database error:[/bold red] {str(e)}")
+            if not DATABASE_AVAILABLE:
+                console.print(f"[bold red]Database functionality not available:[/bold red] {DATABASE_IMPORT_ERROR}")
+                console.print("[yellow]Install PostgreSQL and psycopg with binary extras:[/yellow]")
+                console.print("[yellow]poetry remove psycopg && poetry add 'psycopg[binary]'[/yellow]")
                 console.print("[yellow]Continuing with insights generation...[/yellow]")
+            else:
+                try:
+                    console.print("[bold]Saving to database...[/bold]")
+                    db_manager = DatabaseManager(connection_string=db_connection)
+                    db_manager.initialize_database()
+                    saved_count = db_manager.store_file_infos(files)
+                    console.print(f"[green]Saved {saved_count} files to database[/green]")
+                except Exception as e:
+                    console.print(f"[bold red]Database error:[/bold red] {str(e)}")
+                    console.print("[yellow]Continuing with insights generation...[/yellow]")
 
         # Generate insights
         console.print("[bold]Generating insights...[/bold]")
@@ -160,6 +173,12 @@ def db_insights(
     """
     console.print(Panel.fit("File Insights Tool - Database Mode", style="bold blue"))
 
+    if not DATABASE_AVAILABLE:
+        console.print(f"[bold red]Database functionality not available:[/bold red] {DATABASE_IMPORT_ERROR}")
+        console.print("[yellow]Install PostgreSQL and psycopg with binary extras:[/yellow]")
+        console.print("[yellow]poetry remove psycopg && poetry add 'psycopg[binary]'[/yellow]")
+        return 1
+
     try:
         # Connect to database
         console.print("[bold]Connecting to database...[/bold]")
@@ -219,6 +238,12 @@ def db_clear(db_connection: Optional[str] = None):
     Clear all files from the database.
     """
     console.print(Panel.fit("File Insights Tool - Database Clear", style="bold red"))
+
+    if not DATABASE_AVAILABLE:
+        console.print(f"[bold red]Database functionality not available:[/bold red] {DATABASE_IMPORT_ERROR}")
+        console.print("[yellow]Install PostgreSQL and psycopg with binary extras:[/yellow]")
+        console.print("[yellow]poetry remove psycopg && poetry add 'psycopg[binary]'[/yellow]")
+        return 1
 
     try:
         # Connect to database

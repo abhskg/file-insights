@@ -138,23 +138,42 @@ class FileParser:
         # Get file extension (normalized to lowercase)
         extension = file_path.suffix.lower()
 
-        # Get a preview of the file content if it's not a common binary format
-        content_preview = None
-        if extension not in self._common_binary_extensions:
-            try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    content_preview = f.read(1000)  # First 1000 characters
-            except Exception:
-                pass
-
-        # Try to determine MIME type
+        # Determine MIME type first to better detect binary files
         mime_type = None
         try:
             import mimetypes
-
             mime_type, _ = mimetypes.guess_type(str(file_path))
         except Exception:
             pass
+            
+        # Determine if the file is likely binary based on extension or MIME type
+        likely_binary = (
+            extension in self._common_binary_extensions or
+            (mime_type and not mime_type.startswith(("text/", "application/json")))
+        )
+
+        # Get a preview of the file content if it's not likely to be binary
+        content_preview = None
+        if not likely_binary and stat.st_size < 1024 * 1024:  # Skip files larger than 1MB
+            try:
+                # Try to read the file with different encodings
+                for encoding in ['utf-8', 'latin-1']:
+                    try:
+                        with open(file_path, "r", encoding=encoding, errors="replace") as f:
+                            content = f.read(1000)  # First 1000 characters
+                            
+                            # Check for null bytes or too many non-printable characters
+                            if '\x00' in content or sum(1 for c in content if ord(c) < 32 and c not in '\n\r\t') > len(content) * 0.1:
+                                content_preview = None
+                                likely_binary = True
+                                break
+                                
+                            content_preview = content
+                            break
+                    except UnicodeDecodeError:
+                        continue
+            except Exception:
+                pass
 
         file_info = FileInfo(
             path=file_path,
