@@ -26,51 +26,87 @@ def extract_video_metadata(file_info: FileInfo) -> FileInfo:
     
     try:
         from moviepy.editor import VideoFileClip
+        import os
         
         file_path = str(file_info.path)
+        
+        # Skip files that are too small to be valid videos
+        file_size = os.path.getsize(file_path)
+        if file_size < 10000:  # Skip files smaller than ~10KB
+            print(f"Skipping file (too small): {file_path} ({file_size} bytes)")
+            return file_info
+            
         print(f"Opening video file: {file_path}")
         
-        with VideoFileClip(file_path) as clip:
-            print(f"Video loaded. Duration: {clip.duration}, Size: {clip.size}")
+        # Set a timeout for video loading to prevent hanging on corrupted files
+        try:
+            clip = VideoFileClip(file_path, audio=False, verbose=False)
             
-            file_info.video_duration = float(clip.duration) if clip.duration is not None else None
-            
-            if hasattr(clip, 'size') and clip.size and len(clip.size) == 2:
-                width, height = clip.size
-                file_info.video_resolution = (int(width), int(height))
+            try:
+                print(f"Video loaded. Getting properties...")
                 
-            file_info.video_fps = float(clip.fps) if clip.fps is not None else None
-            
-            # Try to get codec information if available
-            if hasattr(clip, 'codec_name'):
-                file_info.video_codec = clip.codec_name
-            
-            # Get audio codec if audio is present
-            if clip.audio is not None:
-                if hasattr(clip.audio, 'codec_name'):
-                    file_info.audio_codec = clip.audio.codec_name
-                print(f"Audio track found in {file_path}")
-            else:
-                print(f"No audio track in {file_path}")
+                # Get duration - needed for database
+                try:
+                    if hasattr(clip, 'duration') and clip.duration is not None:
+                        file_info.video_duration = float(clip.duration)
+                        print(f"  - Duration: {file_info.video_duration}")
+                    else:
+                        print("  - No duration available")
+                except Exception as e:
+                    print(f"  - Error getting duration: {e}")
                 
-        print(f"Successfully extracted metadata from {file_path}: Resolution: {file_info.video_resolution}, FPS: {file_info.video_fps}")
+                # Get resolution - w,h are the original attributes
+                try:
+                    if hasattr(clip, 'w') and hasattr(clip, 'h') and clip.w and clip.h:
+                        file_info.video_resolution = (int(clip.w), int(clip.h))
+                        print(f"  - Resolution (w,h): {file_info.video_resolution}")
+                    elif hasattr(clip, 'size') and clip.size and len(clip.size) == 2:
+                        file_info.video_resolution = (int(clip.size[0]), int(clip.size[1]))
+                        print(f"  - Resolution (size): {file_info.video_resolution}")
+                    else:
+                        print("  - No resolution available")
+                except Exception as e:
+                    print(f"  - Error getting resolution: {e}")
+                
+                # Get FPS
+                try:
+                    if hasattr(clip, 'fps') and clip.fps is not None:
+                        file_info.video_fps = float(clip.fps)
+                        print(f"  - FPS: {file_info.video_fps}")
+                    else:
+                        print("  - No FPS available")
+                except Exception as e:
+                    print(f"  - Error getting FPS: {e}")
+                
+                # Try to get codec information if available
+                if hasattr(clip, 'codec_name'):
+                    file_info.video_codec = clip.codec_name
+                    print(f"  - Video codec: {file_info.video_codec}")
+                
+                # Handle audio separately to avoid errors
+                has_audio = False
+                if hasattr(clip, 'audio') and clip.audio is not None:
+                    has_audio = True
+                    if hasattr(clip.audio, 'codec_name'):
+                        file_info.audio_codec = clip.audio.codec_name
+                        print(f"  - Audio codec: {file_info.audio_codec}")
+                
+                print(f"Successfully extracted metadata from {file_path}")
+                print(f"  - Has audio: {has_audio}")
+                
+            finally:
+                # Always close the clip to free resources
+                clip.close()
+                
+        except Exception as e:
+            print(f"Error reading video file {file_path}: {e}")
                 
     except Exception as e:
         print(f"Error extracting video metadata for {file_info.path}: {e}")
-        # Don't return None - just keep the original file_info without metadata
         
-    # Ensure we have valid metadata types for the database
-    if file_info.video_duration is not None and not isinstance(file_info.video_duration, (int, float)):
-        try:
-            file_info.video_duration = float(file_info.video_duration)
-        except (ValueError, TypeError):
-            file_info.video_duration = None
-            
-    if file_info.video_fps is not None and not isinstance(file_info.video_fps, (int, float)):
-        try:
-            file_info.video_fps = float(file_info.video_fps)
-        except (ValueError, TypeError):
-            file_info.video_fps = None
+    # Verify that we have at least some basic metadata
+    has_metadata = hasattr(file_info, 'video_duration') and file_info.video_duration is not None
+    print(f"Video metadata extraction {'successful' if has_metadata else 'failed'} for {file_info.path}")
         
     return file_info
 

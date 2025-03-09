@@ -113,6 +113,7 @@ class DatabaseManager:
                             mime_type TEXT,
                             is_binary BOOLEAN NOT NULL,
                             is_video BOOLEAN NOT NULL,
+                            duration FLOAT NOT NULL DEFAULT 0,
                             scan_timestamp TIMESTAMP NOT NULL
                         )
                     """)
@@ -207,13 +208,21 @@ class DatabaseManager:
                             name = self._prepare_for_db(file_info.name)
                             extension = self._prepare_for_db(file_info.extension)
                             mime_type = self._prepare_for_db(file_info.mime_type)
+                            
+                            # Get duration for all files (0 for non-videos)
+                            duration = 0.0
+                            if file_info.is_video and file_info.video_duration is not None:
+                                try:
+                                    duration = float(file_info.video_duration)
+                                except (ValueError, TypeError):
+                                    duration = 0.0
                         
-                            # Insert into files table - no content_preview
+                            # Insert into files table with duration
                             cur.execute("""
                                 INSERT INTO files (
                                     path, name, size, extension, created_time, modified_time, 
-                                    mime_type, is_binary, is_video, scan_timestamp
-                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    mime_type, is_binary, is_video, duration, scan_timestamp
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                 RETURNING id
                             """, (
                                 path_str,
@@ -225,6 +234,7 @@ class DatabaseManager:
                                 mime_type,
                                 file_info.is_binary,
                                 file_info.is_video,
+                                duration,
                                 scan_timestamp
                             ))
                             
@@ -232,7 +242,7 @@ class DatabaseManager:
                             count += 1
                             
                             # If this is a video with metadata, store in video_metadata table
-                            if file_info.is_video and file_info.has_video_metadata:
+                            if file_info.is_video and hasattr(file_info, 'video_duration') and file_info.video_duration is not None:
                                 resolution_width = None
                                 resolution_height = None
                                 
@@ -243,32 +253,39 @@ class DatabaseManager:
                                         elif isinstance(file_info.video_resolution, str) and 'x' in file_info.video_resolution:
                                             width_str, height_str = file_info.video_resolution.split('x', 1)
                                             resolution_width, resolution_height = int(width_str), int(height_str)
-                                    except (ValueError, TypeError, IndexError):
+                                    except (ValueError, TypeError, IndexError) as e:
+                                        print(f"  - Error parsing resolution: {e}")
                                         pass
                                 
                                 video_codec = self._prepare_for_db(file_info.video_codec)
                                 audio_codec = self._prepare_for_db(file_info.audio_codec)
                                 
-                                # Debug: Print video metadata before inserting
-                                print(f"Video metadata for {file_info.path.name}: " 
-                                     f"duration={file_info.video_duration}, "
-                                     f"resolution={resolution_width}x{resolution_height}, "
-                                     f"fps={file_info.video_fps}")
+                                # Ensure values are properly cast
+                                try:
+                                    video_fps = float(file_info.video_fps) if file_info.video_fps is not None else None
+                                except (ValueError, TypeError):
+                                    print(f"  - Error converting FPS {file_info.video_fps} to float")
+                                    video_fps = None
                                 
-                                cur.execute("""
-                                    INSERT INTO video_metadata (
-                                        file_id, duration, resolution_width, resolution_height,
-                                        fps, video_codec, audio_codec
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                                """, (
-                                    file_id,
-                                    file_info.video_duration,
-                                    resolution_width,
-                                    resolution_height,
-                                    file_info.video_fps,
-                                    video_codec,
-                                    audio_codec
-                                ))
+                                try:
+                                    cur.execute("""
+                                        INSERT INTO video_metadata (
+                                            file_id, duration, resolution_width, resolution_height,
+                                            fps, video_codec, audio_codec
+                                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                    """, (
+                                        file_id,
+                                        duration,
+                                        resolution_width,
+                                        resolution_height,
+                                        video_fps,
+                                        video_codec,
+                                        audio_codec
+                                    ))
+                                except Exception as e:
+                                    print(f"  ✗ Failed to insert video metadata: {e}")
+                                    raise
+                                    
                         except Exception as e:
                             # Log the error but continue processing other files
                             errors.append(f"Error storing file {file_info.path}: {str(e)}")
@@ -340,6 +357,9 @@ class DatabaseManager:
                         if row.get('resolution_width') is not None and row.get('resolution_height') is not None:
                             video_resolution = (row['resolution_width'], row['resolution_height'])
                         
+                        # Use the duration from video_metadata if available, otherwise from files table
+                        duration = row.get('video_duration') if row.get('video_duration') is not None else row.get('duration', 0.0)
+                        
                         file_info = FileInfo(
                             path=path,
                             size=row['size'],
@@ -348,7 +368,7 @@ class DatabaseManager:
                             modified_time=row['modified_time'],
                             content_preview=None,  # Don't retrieve content preview
                             mime_type=row['mime_type'],
-                            video_duration=row.get('video_duration'),
+                            video_duration=duration,
                             video_resolution=video_resolution,
                             video_fps=row.get('video_fps'),
                             video_codec=row.get('video_codec'),
