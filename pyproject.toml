@@ -2,7 +2,7 @@
 name = "file-insights"
 version = "0.1.0"
 description = "A tool to parse directories recursively and generate insights about files"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Abhas Kumar Gorain <abhasgorain@gmail.com>"]
 readme = "README.md"
 packages = [{include = "file_insights"}]
 
